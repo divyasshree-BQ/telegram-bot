@@ -1,69 +1,68 @@
-import logging
-import json
 import asyncio
+import json
 import websockets
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
+# Your bot token from the BotFather
+BOT_TOKEN = 'tokennn'
 
-# Telegram Bot Token 
-TELEGRAM_BOT_TOKEN = 'tokenn'
+# Define a function to send messages to the Telegram bot
+def send_message(update: Update, message: str):
+    update.message.reply_text(message)
 
-# List to store chat IDs dynamically
-chat_ids = []
-
-# GraphQL Subscription Query
-subscription_query = """
-subscription {
-  EVM(network: eth) {
-    Transfers(limit: {count: 10}, orderBy: {descending: Block_Time}) {
-      Transfer {
-        Amount
-        Currency {
-          Fungible
-          Name
-          ProtocolName
-          Symbol
+# Your existing code for WebSocket connection
+async def my_component():
+    url = 'wss://streaming.bitquery.io/graphql'
+    message = json.dumps({
+        "type": "start",
+        "id": "1",
+        "payload": {
+            "query": "subscription {\n  EVM {\n    Transfers {\n      Transfer {\n        Amount\n        __typename\n        Currency {\n          __typename\n          Symbol\n        }\n      }\n    }\n  }\n}",
+            "variables": {}
+        },
+        "headers": {
+            "X-API-KEY": "keyy"
         }
-        Data
-        Id
-        Receiver
-        Sender
-        Success
-        Type
-      }
-    }
-  }
-}
-"""
+    })
 
+    async def connect():
+        async with websockets.connect(url, subprotocols=['graphql-ws']) as ws:
+            await ws.send(message)
 
-async def fetch_and_send_updates():
-    print('here 42')
-    uri = "wss://streaming.bitquery.io/graphql?api_key=keyy"
-    
-    try:
-        async with websockets.connect(uri) as websocket:
-            print('here 45')
-            await websocket.send(subscription_query)
-            
             while True:
-                response = await websocket.recv()
-                logging.info(f"Received update: {response}")
+                response = await ws.recv()
+                response = json.loads(response)
+                
+                if response.get('type') == 'data':
+                    print(response['payload']['data']['EVM']['Transfers'])
+                  
 
-                # Parse the JSON response
-                update = json.loads(response)
+    await connect()
 
-                await send_update_to_telegram_bots(update)
+# Function to start the WebSocket connection and send updates to Telegram
+async def start_websocket_and_send_updates(context: CallbackContext):
+    try:
+        await my_component()
     except Exception as e:
-        logging.error(e)
+        send_message(context.bot, f"An error occurred: {str(e)}")
 
+# Command handler to start the WebSocket connection
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("Starting WebSocket connection...")
+    context.job_queue.run_once(start_websocket_and_send_updates, 0)
 
-async def send_update_to_telegram_bots(update, context):
-    print('here 64')
-    bot = context.bot
+# Create and configure the Telegram bot
+def main():
+    updater = Updater(BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-    for chat_id in chat_ids:
-        await bot.send_message(chat_id, f"Bitquery Update:\n\n{update}")
+    # Register command handlers
+    dp.add_handler(CommandHandler("start", start))
 
+    # Start the bot
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == "__main__":
-    asyncio.run(fetch_and_send_updates())
+    main()
