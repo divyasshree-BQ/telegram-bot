@@ -1,18 +1,20 @@
 import asyncio
 import json
 import websockets
+import tracemalloc
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
 # Your bot token from the BotFather
-BOT_TOKEN = 'tokennn'
+BOT_TOKEN = 'tokenn'
 
 # Define a function to send messages to the Telegram bot
 def send_message(update: Update, message: str):
     update.message.reply_text(message)
 
-# Your existing code for WebSocket connection
+# websocket code
 async def my_component():
+    print("line 30")
     url = 'wss://streaming.bitquery.io/graphql'
     message = json.dumps({
         "type": "start",
@@ -27,6 +29,7 @@ async def my_component():
     })
 
     async def connect():
+       
         async with websockets.connect(url, subprotocols=['graphql-ws']) as ws:
             await ws.send(message)
 
@@ -42,6 +45,7 @@ async def my_component():
 
 # Function to start the WebSocket connection and send updates to Telegram
 async def start_websocket_and_send_updates(context: CallbackContext):
+    print("line 45")
     try:
         await my_component()
     except Exception as e:
@@ -49,11 +53,13 @@ async def start_websocket_and_send_updates(context: CallbackContext):
 
 # Command handler to start the WebSocket connection
 def start(update: Update, context: CallbackContext):
+    print("line 52")
     update.message.reply_text("Starting WebSocket connection...")
-    context.job_queue.run_once(start_websocket_and_send_updates, 0)
+    asyncio.run(start_websocket_and_send_updates(context))
 
 # Create and configure the Telegram bot
 def main():
+    tracemalloc.start()
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
